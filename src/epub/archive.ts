@@ -105,11 +105,11 @@ export function encodeText(value: string): Uint8Array {
 
 export function createEpubArchive(files: ArchiveFiles): Uint8Array {
   const zippable: Zippable = {};
-  zippable.mimetype = [strToU8(MIME), { level: 0, mtime: new Date('1980-01-01T00:00:00Z') }];
+  zippable.mimetype = [strToU8(MIME), { level: 0, mtime: new Date(1980, 0, 2) }];
   for (const path of [...files.keys()].filter((entry) => entry !== 'mimetype').sort()) {
     const data = files.get(path)!;
     const alreadyCompressed = /\.(?:jpe?g|png|gif|webp|avif|mp3|mp4|woff2?|otf|ttf)$/i.test(path);
-    zippable[path] = [data, { level: alreadyCompressed ? 0 : 6, mtime: new Date('1980-01-01T00:00:00Z') }];
+    zippable[path] = [data, { level: alreadyCompressed ? 0 : 6, mtime: new Date(1980, 0, 2) }];
   }
   return zipSync(zippable);
 }
