@@ -9,7 +9,8 @@ export type EpubErrorCode =
   | 'XML_PARSE_FAILED'
   | 'ZIP_PATH_TRAVERSAL'
   | 'ZIP_BOMB_LIMIT'
-  | 'POST_VALIDATION_FAILED';
+  | 'POST_VALIDATION_FAILED'
+  | 'S2TW_NOT_SIMPLIFIED';
 
 export class EpubError extends Error {
   constructor(

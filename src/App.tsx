@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { strToU8, zipSync, type Zippable } from 'fflate';
 import { resolveLanguage, translator, type TranslationKey } from './i18n';
+import { MAX_TRADITIONAL_RATIO } from './epub/s2tw';
 import { inspectFile, matchFileImages, processFile } from './workerClient';
 import type { BookInfo, FileStatus, ImageMatch, Language, ProcessOptions, ProcessResult, Progression, ReportEntry, WorkerProgress } from './types';
 
@@ -24,7 +25,7 @@ interface FileItem {
   copied?: boolean;
 }
 
-const DEFAULT_OPTIONS: ProcessOptions = { vertical: false, horizontal: false, japaneseMode: false, progression: 'auto', imageMappings: {} };
+const DEFAULT_OPTIONS: ProcessOptions = { vertical: false, horizontal: false, japaneseMode: false, s2tw: false, progression: 'auto', imageMappings: {} };
 const GITHUB_URL = 'https://github.com/haohailong/EPUB-Tweaker';
 const FACEBOOK_GROUP_URL = 'https://www.facebook.com/groups/ereaderfamily';
 const PDF_SLICER_URL = 'https://pdf-slicer.olo.la/';
@@ -42,13 +43,14 @@ const ruleKeys: Record<string, TranslationKey> = {
   'pseudo-box-shadow': 'ruleCss', 'svg-title': 'ruleSvg', 'chinese-ruby': 'ruleRuby', 'vertical-layout': 'ruleVertical', 'horizontal-layout': 'ruleHorizontal',
   'kindle-language-metadata': 'ruleKindleLanguage', 'reflowable-svg-page': 'ruleReflowableSvgPage', 'reflowable-page-spread': 'ruleReflowableSpread', 'standard-writing-mode': 'ruleStandardWritingMode', 'kindle-vertical-chinese': 'ruleKindleVerticalChinese',
   'japanese-mode': 'ruleJapanese', 'image-replacement': 'ruleImage', 'utf8-normalization': 'ruleUtf8', 'page-progression': 'ruleProgression', 'kindle-writing-mode': 'ruleWritingMode',
-  'vertical-fixed-layout': 'ruleVerticalSkipped'
+  'vertical-fixed-layout': 'ruleVerticalSkipped', 's2tw': 'ruleS2tw', 's2tw-embedded-font': 'ruleS2twFont'
 };
 
 const errorKeys: Record<string, TranslationKey> = {
   INVALID_EPUB_ARCHIVE: 'errorInvalid', EPUB_CONTAINER_MISSING: 'errorContainer', PACKAGE_DOCUMENT_MISSING: 'errorPackage',
   MANIFEST_RESOURCE_MISSING: 'errorManifest', SPINE_RESOURCE_MISSING: 'errorSpine', DRM_PROTECTED: 'errorDrm',
-  UNSUPPORTED_ENCRYPTION: 'errorDrm', XML_PARSE_FAILED: 'errorXml', ZIP_PATH_TRAVERSAL: 'errorUnsafe', ZIP_BOMB_LIMIT: 'errorTooLarge', POST_VALIDATION_FAILED: 'errorValidation'
+  UNSUPPORTED_ENCRYPTION: 'errorDrm', XML_PARSE_FAILED: 'errorXml', ZIP_PATH_TRAVERSAL: 'errorUnsafe', ZIP_BOMB_LIMIT: 'errorTooLarge', POST_VALIDATION_FAILED: 'errorValidation',
+  S2TW_NOT_SIMPLIFIED: 'errorNotSimplified'
 };
 
 function formatBytes(size: number, locale: string): string {
@@ -122,7 +124,7 @@ export default function App({ onRegisterUpdate, updateApp }: AppProps) {
     setItems((current) => current.map((item) => item.id === id ? { ...item, ...(typeof update === 'function' ? update(item) : update) } : item));
   };
 
-  const updateGlobalOptions = (next: Partial<Pick<ProcessOptions, 'vertical' | 'horizontal' | 'japaneseMode' | 'progression'>>) => {
+  const updateGlobalOptions = (next: Partial<Pick<ProcessOptions, 'vertical' | 'horizontal' | 'japaneseMode' | 's2tw' | 'progression'>>) => {
     setGlobalOptions((current) => ({ ...current, ...next }));
     setItems((current) => current.map((item) => item.result ? item : {
       ...item,
@@ -256,6 +258,7 @@ export default function App({ onRegisterUpdate, updateApp }: AppProps) {
                 <label><input type="radio" name="layout-transform" checked={globalOptions.horizontal} onChange={() => updateGlobalOptions({ vertical: false, horizontal: true })} /><span>{t('horizontalTransform')}</span></label>
               </div></fieldset>
               <fieldset><legend>{t('japanese')}</legend><label className="check-row"><input type="checkbox" checked={globalOptions.japaneseMode} onChange={(event) => updateGlobalOptions({ japaneseMode: event.target.checked })} /><span>{t('japanese')}<small>{t('japaneseHelp')}</small></span></label></fieldset>
+              <fieldset><legend>{t('s2tw')}</legend><label className="check-row"><input type="checkbox" checked={globalOptions.s2tw} onChange={(event) => updateGlobalOptions({ s2tw: event.target.checked })} /><span>{t('s2tw')}<small>{t('s2twHelp')}</small></span></label></fieldset>
               <fieldset><legend>{t('progression')}</legend><label className="field-label">{t('progression')}<select value={globalOptions.progression} onChange={(event) => updateGlobalOptions({ progression: event.target.value as Progression })}><option value="auto">{t('progressionAuto')}</option><option value="rtl">{t('progressionRtl')}</option><option value="ltr">{t('progressionLtr')}</option></select></label></fieldset>
             </div>
           </section>
@@ -360,9 +363,10 @@ function FileCard({ item, index, language, t, onRemove, onRetry, onProcess, onOp
     </div>
     {item.progress && <div className="progress-wrap" aria-live="polite"><div className="progress-label"><span>{t(phaseKeys[item.progress.phase])}</span><span>{item.progress.percent}%</span></div><progress max="100" value={item.progress.percent} /></div>}
     {info && <dl className="book-meta">
-      <div><dt>{t('filename')}</dt><dd>{item.file.name}</dd></div><div><dt>{t('version')}</dt><dd>{info.version}</dd></div><div><dt>{t('bookLanguage')}</dt><dd>{transition(report?.languageBefore ?? info.language, report?.languageAfter ?? (item.options.japaneseMode ? 'ja' : info.language))}</dd></div>
+      <div><dt>{t('filename')}</dt><dd>{item.file.name}</dd></div><div><dt>{t('version')}</dt><dd>{info.version}</dd></div><div><dt>{t('bookLanguage')}</dt><dd>{transition(report?.languageBefore ?? info.language, report?.languageAfter ?? (item.options.japaneseMode ? 'ja' : item.options.s2tw ? 'zh-TW' : info.language))}</dd></div>
       <div><dt>{t('layout')}</dt><dd>{t(info.layout === 'fixed' ? 'fixed' : info.layout === 'reflowable' ? 'reflowable' : 'unknown')}</dd></div><div><dt>{t('writingMode')}</dt><dd>{transition(translateWritingMode(report?.writingModeBefore ?? info.writingMode), translateWritingMode(report?.writingModeAfter ?? expectedWritingMode))}</dd></div><div><dt>{t('progression')}</dt><dd>{transition(translateProgression(report?.progressionBefore ?? info.progression), translateProgression(report?.progressionAfter ?? expectedProgression))}</dd></div><div><dt>{t('size')}</dt><dd>{formatBytes(item.file.size, language)}</dd></div>
     </dl>}
+    {info && !item.result && !item.options.s2tw && (info.simplifiedRatio ?? 0) > MAX_TRADITIONAL_RATIO && <p className="s2tw-hint">{t('s2twHint')}</p>}
     {errorMessage && <div className="error-box" role="alert"><strong>{t('errorPrefix')}</strong><p>{errorMessage}</p>{item.error?.code && <code>{item.error.code}</code>}</div>}
     {info && !item.result && <section className="card-options" aria-label={t('resourcesAndOutput')}>
       <div className="advanced-grid card-options-grid">

@@ -2,6 +2,7 @@ import * as csstree from 'css-tree';
 import { decodeText, encodeText } from './archive';
 import type { BookModel } from './model';
 import { dirname, relativePath, resolvePath, splitReference } from './path';
+import { applyS2tw, type Convert } from './s2tw';
 import { childByLocalName, elementsByLocalName, firstByLocalName, parseXml, serializeXml } from './xml';
 import type { ProcessOptions, ReplacementPayload, ReportEntry, TechnicalReport, WritingMode } from '../types';
 
@@ -469,7 +470,8 @@ function normalizeTextResources(book: BookModel, entries: ReportEntry[]): void {
 export function applyRepairs(
   book: BookModel,
   options: ProcessOptions,
-  replacements: ReplacementPayload[] = []
+  replacements: ReplacementPayload[] = [],
+  s2tw?: { convert: Convert; ratio: number }
 ): TechnicalReport {
   const entries: ReportEntry[] = [];
   const before = { language: book.language, writingMode: book.writingMode, progression: book.progression };
@@ -483,6 +485,7 @@ export function applyRepairs(
   repairSvg(book, entries);
   convertProblematicChineseRuby(book, entries);
   applyImageReplacements(book, entries, replacements, options.imageMappings);
+  if (s2tw) applyS2tw(book, entries, s2tw);
   if (options.japaneseMode) applyJapaneseMode(book, entries);
   const canConvertHorizontal = options.horizontal && book.layout !== 'fixed';
   const canConvertVertical = options.vertical && !options.horizontal && book.layout !== 'fixed';

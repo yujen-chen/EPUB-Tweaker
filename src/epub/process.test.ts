@@ -3,7 +3,7 @@ import { createEpubArchive, decodeText, openArchiveSync, readFirstLocalHeader } 
 import { inspectEpub, processEpub } from './process';
 import { syntheticEpub } from '../test/fixtures';
 
-const defaults = { vertical: false, horizontal: false, japaneseMode: false, progression: 'auto' as const, imageMappings: {} };
+const defaults = { vertical: false, horizontal: false, japaneseMode: false, s2tw: false, progression: 'auto' as const, imageMappings: {} };
 
 describe('complete EPUB processing', () => {
   it.each([2, 3] as const)('detects and preserves EPUB %s', async (version) => {

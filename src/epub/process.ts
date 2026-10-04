@@ -2,6 +2,7 @@ import { createEpubArchive, openArchive } from './archive';
 import { imageDimensions, matchImages } from './images';
 import { parseBook } from './parser';
 import { applyRepairs } from './repairs';
+import { assertSimplifiedSource, detectSimplifiedRatio, loadConverter, type Convert } from './s2tw';
 import { toBookInfo } from './model';
 import { validateOutput } from './validator';
 import type { BookInfo, ImageMatch, ProcessOptions, ProcessResult, ReplacementPayload, WorkerProgress } from '../types';
@@ -12,13 +13,13 @@ function progress(callback: ProgressCallback | undefined, phase: WorkerProgress[
   callback?.({ phase, percent });
 }
 
-function outputFilename(input: string, requested?: string): string {
+function outputFilename(input: string, requested?: string, convert?: Convert): string {
   if (requested?.trim()) {
     const safe = requested.trim().replace(/[\\/:*?"<>|\0]/g, '-');
     return safe.toLowerCase().endsWith('.epub') ? safe : `${safe}.epub`;
   }
   const base = input.replace(/\.epub$/i, '').replace(/(?:(?:-fixed|-tweaked))+$/i, '');
-  return `${base}-tweaked.epub`;
+  return `${convert ? convert(base) : base}-tweaked.epub`;
 }
 
 export async function inspectEpub(buffer: ArrayBuffer, callback?: ProgressCallback): Promise<BookInfo> {
@@ -27,6 +28,7 @@ export async function inspectEpub(buffer: ArrayBuffer, callback?: ProgressCallba
   progress(callback, 'parsing', 70);
   const book = parseBook(files);
   const info = toBookInfo(book);
+  info.simplifiedRatio = await detectSimplifiedRatio(book);
   for (const image of info.imageResources) {
     const dimensions = imageDimensions(files.get(image.path)!);
     image.width = dimensions?.width;
@@ -59,11 +61,13 @@ export async function processEpub(
   callback?: ProgressCallback
 ): Promise<ProcessResult> {
   progress(callback, 'opening', 5);
+  const convert = options.s2tw ? await loadConverter() : undefined;
   const files = await openArchive(buffer);
   progress(callback, 'parsing', 20);
   const book = parseBook(files);
+  const ratio = convert ? assertSimplifiedSource(book, convert) : undefined;
   progress(callback, 'repairing', 40);
-  const report = applyRepairs(book, options, replacements);
+  const report = applyRepairs(book, options, replacements, convert && ratio !== undefined ? { convert, ratio } : undefined);
   progress(callback, 'normalizing', 65);
   const outputBytes = createEpubArchive(book.files);
   const output = Uint8Array.from(outputBytes).buffer;
@@ -73,7 +77,7 @@ export async function processEpub(
   return {
     info: toBookInfo(book),
     output,
-    outputName: outputFilename(filename, options.outputName),
+    outputName: outputFilename(filename, options.outputName, convert),
     report,
     changed: report.entries.some((entry) => entry.kind !== 'warning')
   };

@@ -25,6 +25,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globIgnores: ['**/cn2t-*.js'],
+        runtimeCaching: [{ urlPattern: ({ url }) => /\/assets\/cn2t-.*\.js$/.test(url.pathname), handler: 'CacheFirst', options: { cacheName: 'opencc-dictionary' } }],
         cleanupOutdatedCaches: true,
         navigateFallbackDenylist: [/^\/api\//]
       }

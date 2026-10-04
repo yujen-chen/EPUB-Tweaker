@@ -19,6 +19,10 @@ export interface FixtureOptions {
   languageAttributes?: boolean;
   svgCoverPage?: boolean;
   spineProperties?: string;
+  bodyHtml?: string;
+  title?: string;
+  navLabel?: string;
+  metadataExtras?: string;
 }
 
 const enc = (value: string) => strToU8(value);
@@ -32,9 +36,10 @@ export function syntheticEpub(options: FixtureOptions = {}): ArrayBuffer {
   const ruby = options.ruby === 'problematic'
     ? '<ruby><rb>漢</rb><rt>hàn</rt><rb>字</rb><rt>zì</rt></ruby>'
     : options.ruby === 'simple' ? '<ruby>漢<rt>かん</rt></ruby>' : 'Hello';
+  const bodyContent = options.bodyHtml ?? ruby;
   const style = options.vertical ? '<style>html,body{writing-mode:vertical-rl}</style>' : '';
   const image = options.includeImage ? '<img src="cover.png" alt="cover"/>' : '';
-  files.set('OEBPS/chapter.xhtml', enc(`<?xml version="1.0" encoding="UTF-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml"><head><title>One</title>${style}<link rel="stylesheet" type="text/css" href="style.css"/></head><body id="reading">${ruby}${image}</body></html>`));
+  files.set('OEBPS/chapter.xhtml', enc(`<?xml version="1.0" encoding="UTF-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml"><head><title>One</title>${style}<link rel="stylesheet" type="text/css" href="style.css"/></head><body id="reading">${bodyContent}${image}</body></html>`));
   files.set('OEBPS/style.css', enc(options.cssIssue ? 'p::before{content:"";box-shadow:0 0 2px #000;color:red}' : 'body{line-height:1.4}\n'));
   if (options.svgCoverPage) {
     files.set('OEBPS/cover.xhtml', enc('<?xml version="1.0" encoding="UTF-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:xlink="http://www.w3.org/1999/xlink"><head><title>Cover</title><meta name="viewport" content="width=600, height=824"/><link rel="stylesheet" href="fixed-cover.css" type="text/css"/></head><body><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 600 824"><image width="600" height="824" xlink:href="cover.png"/></svg></body></html>'));
@@ -50,9 +55,9 @@ export function syntheticEpub(options: FixtureOptions = {}): ArrayBuffer {
   }
   const navTarget = options.brokenBodyAnchor ? 'chapter.xhtml#reading' : 'chapter.xhtml';
   if (version === 3) {
-    files.set('OEBPS/nav.xhtml', enc(`<?xml version="1.0" encoding="UTF-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>TOC</title></head><body><nav epub:type="toc"><ol><li><a href="${navTarget}">One</a></li></ol></nav></body></html>`));
+    files.set('OEBPS/nav.xhtml', enc(`<?xml version="1.0" encoding="UTF-8"?>\n<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>TOC</title></head><body><nav epub:type="toc"><ol><li><a href="${navTarget}">${options.navLabel ?? 'One'}</a></li></ol></nav></body></html>`));
   } else {
-    files.set('OEBPS/toc.ncx', enc(`<?xml version="1.0" encoding="UTF-8"?>\n<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/"><head/><docTitle><text>Fixture</text></docTitle><navMap><navPoint id="n1" playOrder="1"><navLabel><text>One</text></navLabel><content src="${navTarget}"/></navPoint></navMap></ncx>`));
+    files.set('OEBPS/toc.ncx', enc(`<?xml version="1.0" encoding="UTF-8"?>\n<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/"><head/><docTitle><text>${options.title ?? 'Fixture'}</text></docTitle><navMap><navPoint id="n1" playOrder="1"><navLabel><text>${options.navLabel ?? 'One'}</text></navLabel><content src="${navTarget}"/></navPoint></navMap></ncx>`));
   }
   if (options.pageMap) files.set('OEBPS/page-map.xml', enc('<?xml version="1.0" encoding="UTF-8"?>\n<page-map xmlns="http://www.idpf.org/2007/opf"><page name="1" href="chapter.xhtml"/></page-map>'));
   const navManifest = version === 3
@@ -71,7 +76,7 @@ export function syntheticEpub(options: FixtureOptions = {}): ArrayBuffer {
   const languageAttributes = options.languageAttributes ? ' id="language1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="dcterms:RFC3066"' : '';
   const coverSpine = options.svgCoverPage ? '<itemref idref="cover-page" properties="rendition:layout-pre-paginated rendition:spread-none rendition:page-spread-center"/>' : '';
   const spineProperties = options.spineProperties ? ` properties="${options.spineProperties}"` : '';
-  files.set('OEBPS/content.opf', enc(`<?xml version="1.0" encoding="UTF-8"?>\n<package xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/" version="${version}.0" unique-identifier="uid"><metadata><dc:identifier id="uid">urn:uuid:fixture</dc:identifier><dc:title>Fixture Book</dc:title><dc:creator>Test Author</dc:creator><dc:language${languageAttributes}>${language}</dc:language>${options.svgCoverPage ? '<meta property="rendition:layout">reflowable</meta>' : ''}</metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="css" href="style.css" media-type="text/css"/>${navManifest}${extraManifest}</manifest><spine${version === 2 ? ' toc="ncx"' : ''}${progression}${pageMap}>${coverSpine}<itemref idref="${spineId}"${spineProperties}/></spine></package>`));
+  files.set('OEBPS/content.opf', enc(`<?xml version="1.0" encoding="UTF-8"?>\n<package xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/" version="${version}.0" unique-identifier="uid"><metadata><dc:identifier id="uid">urn:uuid:fixture</dc:identifier><dc:title>${options.title ?? 'Fixture Book'}</dc:title><dc:creator>Test Author</dc:creator><dc:language${languageAttributes}>${language}</dc:language>${options.metadataExtras ?? ''}${options.svgCoverPage ? '<meta property="rendition:layout">reflowable</meta>' : ''}</metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/><item id="css" href="style.css" media-type="text/css"/>${navManifest}${extraManifest}</manifest><spine${version === 2 ? ' toc="ncx"' : ''}${progression}${pageMap}>${coverSpine}<itemref idref="${spineId}"${spineProperties}/></spine></package>`));
   if (options.encrypted || options.staleEncryption) {
     const algorithm = options.encrypted ? 'http://www.w3.org/2001/04/xmlenc#aes256-cbc' : 'http://ns.adobe.com/pdf/enc#RC';
     const target = options.encrypted ? 'OEBPS/cover.png' : 'OEBPS/chapter.xhtml';

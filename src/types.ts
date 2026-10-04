@@ -49,6 +49,7 @@ export interface BookInfo {
   images: number;
   imageResources: ImageInfo[];
   encryptedResources: number;
+  simplifiedRatio?: number;
 }
 
 export type ReportKind = 'repair' | 'tweak' | 'warning' | 'visible';
@@ -84,6 +85,7 @@ export interface ProcessOptions {
   vertical: boolean;
   horizontal: boolean;
   japaneseMode: boolean;
+  s2tw: boolean;
   progression: Progression;
   outputName?: string;
   imageMappings: Record<string, string>;
